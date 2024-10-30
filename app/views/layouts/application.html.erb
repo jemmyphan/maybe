@@ -9,13 +9,15 @@
     <%= stylesheet_link_tag "tailwind", "inter-font", "data-turbo-track": "reload" %>
     <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
 
+    <%= combobox_style_tag %>
+
     <%= javascript_importmap_tags %>
     <%= hotwire_livereload_tags if Rails.env.development? %>
     <%= turbo_refreshes_with method: :morph, scroll: :preserve %>
 
     <meta name="viewport"
           content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Maybe">
     <meta name="msapplication-TileColor" content="#ffffff">
@@ -25,6 +27,9 @@
   </head>
 
   <body class="h-full">
+    <%= render "impersonation_sessions/super_admin_bar" if Current.true_user&.super_admin? %>
+    <%= render "impersonation_sessions/approval_bar" if Current.true_user&.impersonated_support_sessions&.initiated&.any? %>
+
     <div class="fixed z-50 space-y-1 top-6 right-10">
       <div id="notification-tray">
         <%= render_flash_notifications %>
@@ -41,7 +46,7 @@
 
     <%= render "shared/confirm_modal" %>
 
-    <% if self_hosted? %>
+    <% if self_hosted? && Current.user&.onboarded_at.present? %>
       <%= render "shared/app_version" %>
     <% end %>
   </body>

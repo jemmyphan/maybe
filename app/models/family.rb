@@ -1,4 +1,6 @@
 class Family < ApplicationRecord
+  DATE_FORMATS = [ "%m-%d-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%m/%d/%Y", "%e/%m/%Y", "%Y.%m.%d" ]
+
   include Providable
 
   has_many :users, dependent: :destroy
@@ -13,6 +15,7 @@ class Family < ApplicationRecord
   has_many :issues, through: :accounts
 
   validates :locale, inclusion: { in: I18n.available_locales.map(&:to_s) }
+  validates :date_format, inclusion: { in: DATE_FORMATS }
 
   def snapshot(period = Period.all)
     query = accounts.active.joins(:balances)
@@ -126,5 +129,13 @@ class Family < ApplicationRecord
 
   def synth_usage
     self.class.synth_provider&.usage
+  end
+
+  def subscribed?
+    stripe_subscription_status == "active"
+  end
+
+  def primary_user
+    users.order(:created_at).first
   end
 end

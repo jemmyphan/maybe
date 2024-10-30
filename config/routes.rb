@@ -1,21 +1,36 @@
 Rails.application.routes.draw do
-  mount GoodJob::Engine => "jobs"
+  mount GoodJob::Engine => "good_job"
 
   get "changelog", to: "pages#changelog"
   get "feedback", to: "pages#feedback"
+  get "early-access", to: "pages#early_access"
 
-  resource :registration
+  resource :registration, only: %i[new create]
   resources :sessions, only: %i[new create destroy]
-  resource :password_reset
-  resource :password
+  resource :password_reset, only: %i[new create edit update]
+  resource :password, only: %i[edit update]
 
-  namespace :settings do
-    resource :profile, only: %i[show update destroy]
-    resource :preferences, only: %i[show update]
-    resource :hosting, only: %i[show update]
+  resources :users, only: %i[update destroy]
+
+  resource :onboarding, only: :show do
+    collection do
+      get :profile
+      get :preferences
+    end
   end
 
-  resources :tags, except: %i[show destroy] do
+  namespace :settings do
+    resource :profile, only: :show
+    resource :preferences, only: :show
+    resource :hosting, only: %i[show update]
+    resource :billing, only: :show
+  end
+
+  resource :subscription, only: %i[new show] do
+    get :success, on: :collection
+  end
+
+  resources :tags, except: :show do
     resources :deletions, only: %i[new create], module: :tag
   end
 
@@ -57,14 +72,14 @@ Rails.application.routes.draw do
     end
 
     scope module: :account do
-      resource :logo, only: :show
-
-      resources :holdings, only: %i[index new show]
+      resources :holdings, only: %i[index new show destroy]
       resources :cashes, only: :index
 
       resources :transactions, only: %i[index update]
       resources :valuations, only: %i[index new create]
-      resources :trades, only: %i[index new create]
+      resources :trades, only: %i[index new create update] do
+        get :securities, on: :collection
+      end
 
       resources :entries, only: %i[edit update show destroy]
     end
@@ -72,6 +87,8 @@ Rails.application.routes.draw do
 
   resources :properties, only: %i[create update]
   resources :vehicles, only: %i[create update]
+  resources :credit_cards, only: %i[create update]
+  resources :loans, only: %i[create update]
 
   resources :transactions, only: %i[index new create] do
     collection do
@@ -103,6 +120,20 @@ Rails.application.routes.draw do
   end
 
   resources :currencies, only: %i[show]
+
+  resources :impersonation_sessions, only: [ :create ] do
+    post :join, on: :collection
+    delete :leave, on: :collection
+
+    member do
+      put :approve
+      put :reject
+      put :complete
+    end
+  end
+
+  # Stripe webhook endpoint
+  post "webhooks/stripe", to: "webhooks#stripe"
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.

@@ -28,9 +28,13 @@ module Accountable
     if balance_series.empty? && period.date_range.end == Date.current
       TimeSeries.new([ { date: Date.current, value: account.balance_money.exchange_to(currency) } ])
     else
-      TimeSeries.from_collection(balance_series, :balance_money)
+      TimeSeries.from_collection(balance_series, :balance_money, favorable_direction: account.asset? ? "up" : "down")
     end
   rescue Money::ConversionError
     TimeSeries.new([])
+  end
+
+  def mode_required?
+    true
   end
 end

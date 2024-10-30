@@ -21,6 +21,7 @@ gem "lucide-rails", github: "maybe-finance/lucide-rails"
 # Hotwire
 gem "stimulus-rails"
 gem "turbo-rails"
+gem "hotwire_combobox"
 
 # Background Jobs
 gem "good_job"
@@ -38,6 +39,7 @@ gem "image_processing", ">= 1.2"
 gem "bcrypt", "~> 3.1"
 gem "faraday"
 gem "faraday-retry"
+gem "faraday-multipart"
 gem "inline_svg"
 gem "octokit"
 gem "pagy"
@@ -45,6 +47,9 @@ gem "rails-settings-cached"
 gem "tzinfo-data", platforms: %i[windows jruby]
 gem "csv"
 gem "redcarpet"
+gem "stripe"
+gem "intercom-rails"
+gem "holidays"
 
 group :development, :test do
   gem "debug", platforms: %i[mri windows]

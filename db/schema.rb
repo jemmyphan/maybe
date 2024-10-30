@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
+ActiveRecord::Schema[7.2].define(version: 2024_10_30_121302) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -19,7 +19,6 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
   # Note that some types may not work with other database engines. Be careful if changing database.
   create_enum "account_status", ["ok", "syncing", "error"]
   create_enum "import_status", ["pending", "importing", "complete", "failed"]
-  create_enum "user_role", ["admin", "member"]
 
   create_table "account_balances", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "account_id", null: false
@@ -45,6 +44,8 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.uuid "transfer_id"
     t.boolean "marked_as_transfer", default: false, null: false
     t.uuid "import_id"
+    t.text "notes"
+    t.boolean "excluded", default: false
     t.index ["account_id"], name: "index_account_entries_on_account_id"
     t.index ["import_id"], name: "index_account_entries_on_import_id"
     t.index ["transfer_id"], name: "index_account_entries_on_transfer_id"
@@ -90,8 +91,6 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.uuid "category_id"
-    t.boolean "excluded", default: false
-    t.text "notes"
     t.uuid "merchant_id"
     t.index ["category_id"], name: "index_account_transactions_on_category_id"
     t.index ["merchant_id"], name: "index_account_transactions_on_merchant_id"
@@ -122,7 +121,11 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.uuid "institution_id"
     t.virtual "classification", type: :string, as: "\nCASE\n    WHEN ((accountable_type)::text = ANY ((ARRAY['Loan'::character varying, 'CreditCard'::character varying, 'OtherLiability'::character varying])::text[])) THEN 'liability'::text\n    ELSE 'asset'::text\nEND", stored: true
     t.uuid "import_id"
+    t.string "mode"
+    t.index ["accountable_id", "accountable_type"], name: "index_accounts_on_accountable_id_and_accountable_type"
     t.index ["accountable_type"], name: "index_accounts_on_accountable_type"
+    t.index ["family_id", "accountable_type"], name: "index_accounts_on_family_id_and_accountable_type"
+    t.index ["family_id", "id"], name: "index_accounts_on_family_id_and_id"
     t.index ["family_id"], name: "index_accounts_on_family_id"
     t.index ["import_id"], name: "index_accounts_on_import_id"
     t.index ["institution_id"], name: "index_accounts_on_institution_id"
@@ -184,6 +187,11 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
   create_table "credit_cards", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "available_credit", precision: 10, scale: 2
+    t.decimal "minimum_payment", precision: 10, scale: 2
+    t.decimal "apr", precision: 10, scale: 2
+    t.date "expiration_date"
+    t.decimal "annual_fee", precision: 10, scale: 2
   end
 
   create_table "cryptos", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -215,6 +223,11 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.string "currency", default: "USD"
     t.datetime "last_synced_at"
     t.string "locale", default: "en"
+    t.string "stripe_plan_id"
+    t.string "stripe_customer_id"
+    t.string "stripe_subscription_status", default: "incomplete"
+    t.string "date_format", default: "%m-%d-%Y"
+    t.string "country", default: "US"
   end
 
   create_table "good_job_batches", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -303,6 +316,29 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.index ["priority", "scheduled_at"], name: "index_good_jobs_on_priority_scheduled_at_unfinished_unlocked", where: "((finished_at IS NULL) AND (locked_by_id IS NULL))"
     t.index ["queue_name", "scheduled_at"], name: "index_good_jobs_on_queue_name_and_scheduled_at", where: "(finished_at IS NULL)"
     t.index ["scheduled_at"], name: "index_good_jobs_on_scheduled_at", where: "(finished_at IS NULL)"
+  end
+
+  create_table "impersonation_session_logs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "impersonation_session_id", null: false
+    t.string "controller"
+    t.string "action"
+    t.text "path"
+    t.string "method"
+    t.string "ip_address"
+    t.text "user_agent"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["impersonation_session_id"], name: "index_impersonation_session_logs_on_impersonation_session_id"
+  end
+
+  create_table "impersonation_sessions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "impersonator_id", null: false
+    t.uuid "impersonated_id", null: false
+    t.string "status", default: "pending", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["impersonated_id"], name: "index_impersonation_sessions_on_impersonated_id"
+    t.index ["impersonator_id"], name: "index_impersonation_sessions_on_impersonator_id"
   end
 
   create_table "import_mappings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -405,6 +441,9 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
   create_table "loans", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "rate_type"
+    t.decimal "interest_rate", precision: 10, scale: 2
+    t.integer "term_months"
   end
 
   create_table "merchants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -439,6 +478,11 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.string "name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "country_code"
+    t.string "exchange_mic"
+    t.string "exchange_acronym"
+    t.index ["country_code"], name: "index_securities_on_country_code"
+    t.index ["ticker", "exchange_mic"], name: "index_securities_on_ticker_and_exchange_mic", unique: true
   end
 
   create_table "security_prices", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -448,6 +492,8 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.string "currency", default: "USD"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "security_id"
+    t.index ["security_id"], name: "index_security_prices_on_security_id"
   end
 
   create_table "sessions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -456,6 +502,9 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.string "ip_address"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "active_impersonator_session_id"
+    t.datetime "subscribed_at"
+    t.index ["active_impersonator_session_id"], name: "index_sessions_on_active_impersonator_session_id"
     t.index ["user_id"], name: "index_sessions_on_user_id"
   end
 
@@ -465,6 +514,27 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["var"], name: "index_settings_on_var", unique: true
+  end
+
+  create_table "stock_exchanges", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "name", null: false
+    t.string "acronym"
+    t.string "mic", null: false
+    t.string "country", null: false
+    t.string "country_code", null: false
+    t.string "city"
+    t.string "website"
+    t.string "timezone_name"
+    t.string "timezone_abbr"
+    t.string "timezone_abbr_dst"
+    t.string "currency_code"
+    t.string "currency_symbol"
+    t.string "currency_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["country"], name: "index_stock_exchanges_on_country"
+    t.index ["country_code"], name: "index_stock_exchanges_on_country_code"
+    t.index ["currency_code"], name: "index_stock_exchanges_on_currency_code"
   end
 
   create_table "taggings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -496,8 +566,9 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
     t.datetime "updated_at", null: false
     t.string "last_prompted_upgrade_commit_sha"
     t.string "last_alerted_upgrade_commit_sha"
-    t.enum "role", default: "member", null: false, enum_type: "user_role"
+    t.string "role", default: "member", null: false
     t.boolean "active", default: true, null: false
+    t.datetime "onboarded_at"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["family_id"], name: "index_users_on_family_id"
   end
@@ -528,10 +599,15 @@ ActiveRecord::Schema[7.2].define(version: 2024_10_03_163448) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "categories", "families"
+  add_foreign_key "impersonation_session_logs", "impersonation_sessions"
+  add_foreign_key "impersonation_sessions", "users", column: "impersonated_id"
+  add_foreign_key "impersonation_sessions", "users", column: "impersonator_id"
   add_foreign_key "import_rows", "imports"
   add_foreign_key "imports", "families"
   add_foreign_key "institutions", "families"
   add_foreign_key "merchants", "families"
+  add_foreign_key "security_prices", "securities"
+  add_foreign_key "sessions", "impersonation_sessions", column: "active_impersonator_session_id"
   add_foreign_key "sessions", "users"
   add_foreign_key "taggings", "tags"
   add_foreign_key "tags", "families"

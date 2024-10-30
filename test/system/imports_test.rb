@@ -16,7 +16,7 @@ class ImportsTest < ApplicationSystemTestCase
 
     find('input[type="submit"][value="Upload CSV"]').click
 
-    select "Date", from: "Date"
+    select "Date", from: "Date*"
     select "YYYY-MM-DD", from: "Date format"
     select "Amount", from: "Amount"
     select "Account", from: "Account (optional)"
@@ -101,7 +101,7 @@ class ImportsTest < ApplicationSystemTestCase
       within(form) do
         select = form.find("select")
         select "Depository", from: select["id"]
-        sleep 1
+        sleep 0.5
       end
     end
 

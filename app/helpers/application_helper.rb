@@ -1,16 +1,25 @@
 module ApplicationHelper
   include Pagy::Frontend
 
+  def date_format_options
+    [
+      [ "DD-MM-YYYY", "%d-%m-%Y" ],
+      [ "MM-DD-YYYY", "%m-%d-%Y" ],
+      [ "YYYY-MM-DD", "%Y-%m-%d" ],
+      [ "DD/MM/YYYY", "%d/%m/%Y" ],
+      [ "YYYY/MM/DD", "%Y/%m/%d" ],
+      [ "MM/DD/YYYY", "%m/%d/%Y" ],
+      [ "D/MM/YYYY", "%e/%m/%Y" ],
+      [ "YYYY.MM.DD", "%Y.%m.%d" ]
+    ]
+  end
+
   def title(page_title)
     content_for(:title) { page_title }
   end
 
   def header_title(page_title)
     content_for(:header_title) { page_title }
-  end
-
-  def permitted_accountable_partial(name)
-    name.underscore
   end
 
   def family_notifications_stream
@@ -80,8 +89,8 @@ module ApplicationHelper
     color = hex || "#1570EF" # blue-600
 
     <<-STYLE.strip
-      background-color: color-mix(in srgb, #{color} 5%, white);
-      border-color: color-mix(in srgb, #{color} 10%, white);
+      background-color: color-mix(in srgb, #{color} 10%, white);
+      border-color: color-mix(in srgb, #{color} 30%, white);
       color: #{color};
     STYLE
   end
@@ -136,13 +145,30 @@ module ApplicationHelper
     end
   end
 
+  # Wrapper around I18n.l to support custom date formats
+  def format_date(object, format = :default, options = {})
+    date = object.to_date
+
+    format_code = options[:format_code] || Current.family&.date_format
+
+    if format_code.present?
+      date.strftime(format_code)
+    else
+      I18n.l(date, format: format, **options)
+    end
+  end
+
   def format_money(number_or_money, options = {})
+    return nil unless number_or_money
+
     money = Money.new(number_or_money)
     options.reverse_merge!(money.format_options(I18n.locale))
     number_to_currency(money.amount, options)
   end
 
   def format_money_without_symbol(number_or_money, options = {})
+    return nil unless number_or_money
+
     money = Money.new(number_or_money)
     options.reverse_merge!(money.format_options(I18n.locale))
     ActiveSupport::NumberHelper.number_to_delimited(money.amount.round(options[:precision] || 0), { delimiter: options[:delimiter], separator: options[:separator] })
